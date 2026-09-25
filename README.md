@@ -7,11 +7,20 @@ statistics plus an ownership verification pass.
 
 ## Architecture
 
-Each node runs a local loader and a receiver thread. Records are parsed
-from the node's data file, hashed with FNV-1a to decide the owning node,
-and sent through a mock inbox network if they belong elsewhere. The
-store is per-node and thread-safe, and the final verification pass checks
-that sampled keys still match their expected owner.
+The implementation is modular: `Schema`, `Record`, and `ClusterConfig`
+handle data definitions and parsing; `Partitioner` computes ownership;
+`KvStore` provides a thread-safe per-node map; `MockInbox` and
+`NetworkHub` provide `connect`-style mock transport; and `Node` loads,
+batches, routes, and receives records. `main.cpp` starts the cluster and
+performs the verification pass.
+
+Ownership is `FNV-1a(key) % node_count`. A node stores local records it owns
+and appends other records to a per-destination batch. Batches travel through
+the destination inbox and are parsed by its receiver thread.
+
+```
+node A loader --send(batch)--> NetworkHub --> node B inbox --recv--> node B store
+```
 
 ## Requirements
 
@@ -33,11 +42,11 @@ data/                   Generated data files land here (git-ignored)
 ```bash
 git clone <this repo>
 cd dht_project
-./scripts/all.sh          # build, generate >=100MB/node test data, run
+./scripts/run.sh all      # build, generate >=100MB/node test data, run
 ```
 
-That builds `kv_loader` and `generate_data`, generates one ~100MB file per node  under `data`, and runs the load job against
-`cluster.conf`.
+That builds `kv_loader` and `generate_data`, generates one ~100MB file per node under `data`, and runs the load job against
+`config/cluster.conf`.
 
 ## Step by step
 
@@ -51,7 +60,7 @@ Produces `kv_loader` and `generate_data`.
 
 ### 2. Configure the cluster
 
-Edit `cluster.conf`:
+Edit `config/cluster.conf`:
 
 ```ini
 num_nodes=4             
@@ -79,6 +88,7 @@ order.
 ```bash
 ./scripts/run.sh                       
 ./scripts/run.sh path/to/other.conf
+./bin/kv_loader config/cluster.conf --verify-sample=5
 ```
 
 Sample output:
@@ -96,7 +106,7 @@ Loaded config: 4 node(s), 4 field(s), key field='user_id'
   total unique keys stored across cluster: 7912345
   elapsed: 4.812s
 
-== Ownership verification (sample) ==
+== Ownership verification (all keys) ==
   key=650149 storedOn=node0 expectedOwner=node0  [OK]
   ...
 All sampled keys are on their correct owner node.
@@ -108,19 +118,29 @@ All sampled keys are on their correct owner node.
   (duplicates are expected; last write wins).
 - **`fromNetwork`** — of `storedRecords`, how many arrived from a peer
   rather than being already-local.
-- **Ownership verification** re-derives each sampled key's expected
-  owner from the partitioner independently of the routing code, and
-  confirms the key is actually sitting on that node. This is the
+- **Ownership verification** re-derives every stored key's expected owner
+  from the partitioner independently of the routing code. Use
+  `--verify-sample=N` for a bounded check on very large runs. This is the
   "evidence records are stored on their corresponding owned nodes" the
   assignment asks for — it's a correctness check, not just a trust-me
   log line.
 
 Exit code is `0` if verification passes, `1` otherwise.
 
-### 5. Clean up
+### 5. Test and clean up
 
 ```bash
-make clean     # removes bin/ and data/*.dat
+make test
+./scripts/test.sh
+```
+
+The test target covers parsing, storage, partitioning, mock transport, and
+an in-process three-node cluster. The shell smoke test generates a small
+dataset, runs the loader, checks its exit status, and requires the ownership
+success message.
+
+```bash
+make clean     # removes bin/ and generated data
 ```
 
 ## Running with your own data
@@ -129,3 +149,19 @@ You can run with own data just drop any `data/node<ID>.dat`
 files in yourself, as long as each line is `|`-delimited and matches the
 field order and types in `config/cluster.conf`. Malformed lines are
 logged and skipped rather than aborting the whole load.
+
+## Duplicate handling
+
+The generator's third argument is `duplicateRatio`; for example,
+`./scripts/generate_data.sh config/cluster.conf 1048576 0.25` creates a
+small dataset with approximately 25% reused keys. `KvStore` keeps the last
+value for duplicate keys and reports inserted versus overwritten records.
+
+## Scalability & Fault Assumptions
+
+Changing the node count causes a full remap because ownership is currently
+`hash(key) % N`; records would need to be reloaded or redistributed. At
+roughly 50-500 nodes, consistent hashing with virtual nodes would move fewer
+keys during membership changes and smooth uneven hash ranges. This project
+assumes no node-failure recovery, uses a single-process mock transport, and
+does not persist records to disk.

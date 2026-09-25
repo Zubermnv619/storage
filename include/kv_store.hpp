@@ -18,10 +18,10 @@ class KvStore {
 public:
     bool put(const Record& rec);
     void noteReceivedFromNetwork();
-    bool contains(const std::string& key) const;
-    size_t size() const;
-    StoreStats stats() const;
-    std::vector<std::string> sampleKeys(size_t n) const;
+    [[nodiscard]] bool contains(const std::string& key) const;
+    [[nodiscard]] size_t size() const;
+    [[nodiscard]] StoreStats stats() const;
+    [[nodiscard]] std::vector<std::string> sampleKeys(size_t n = 0) const;
 
 private:
     mutable std::shared_mutex mutex_;

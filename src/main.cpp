@@ -15,10 +15,10 @@ void printBanner(const std::string& text) {
     std::cout << "\n== " << text << " ==\n";
 }
 
-bool verifyOwnership(const std::deque<Node>& nodes, const Partitioner& partitioner) {
+bool verifyOwnership(const std::deque<Node>& nodes, const Partitioner& partitioner, size_t limit) {
     bool allOk = true;
     for (const auto& node : nodes) {
-        for (const auto& key : node.store().sampleKeys(5)) {
+        for (const auto& key : node.store().sampleKeys(limit)) {
             int expectedOwner = partitioner.ownerOf(key);
             bool ok = (expectedOwner == node.id());
             if (!ok) allOk = false;
@@ -34,7 +34,21 @@ bool verifyOwnership(const std::deque<Node>& nodes, const Partitioner& partition
 } 
 
 int main(int argc, char** argv) {
-    std::string configPath = (argc > 1) ? argv[1] : "config/cluster.conf";
+    std::string configPath = "config/cluster.conf";
+    size_t verifyLimit = 0;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg.rfind("--verify-sample=", 0) == 0) {
+            try {
+                verifyLimit = std::stoull(arg.substr(16));
+            } catch (const std::exception&) {
+                std::cerr << "Invalid --verify-sample value: " << arg << "\n";
+                return 1;
+            }
+        } else {
+            configPath = arg;
+        }
+    }
 
     ClusterConfig cfg;
     try {
@@ -92,8 +106,9 @@ int main(int argc, char** argv) {
     std::cout << "  ---\n  total unique keys stored across cluster: " << totalStored << "\n";
     std::cout << "  elapsed: " << std::fixed << std::setprecision(3) << seconds << "s\n";
 
-    printBanner("Ownership verification (sample)");
-    bool ok = verifyOwnership(nodes, partitioner);
+    printBanner(verifyLimit == 0 ? "Ownership verification (all keys)"
+                                 : "Ownership verification (sample)");
+    bool ok = verifyOwnership(nodes, partitioner, verifyLimit);
     std::cout << (ok ? "All sampled keys are on their correct owner node.\n"
                       : "MISMATCHES FOUND -- see above.\n");
 

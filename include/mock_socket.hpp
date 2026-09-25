@@ -13,6 +13,7 @@ struct WireMessage {
 
 class MockInbox {
 public:
+    [[nodiscard]] bool connect() const;
     void send(int fromNode, const std::string& payload);
     bool recv(WireMessage& out);
     void close();

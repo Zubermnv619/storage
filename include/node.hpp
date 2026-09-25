@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 
 #include "record.hpp"
 #include "schema.hpp"
@@ -14,16 +15,17 @@ class Node {
 public:
     Node(int id, const Schema& schema, const Partitioner& partitioner, NetworkHub& hub);
 
-    int id() const;
+    [[nodiscard]] int id() const;
     KvStore& store();
     const KvStore& store() const;
 
     void receiveLoop();
     void loadLocalFile(const std::string& path);
-    uint64_t linesRead() const;
+    [[nodiscard]] uint64_t linesRead() const;
 
 private:
-    void routeRecord(const Record& rec);
+    void routeRecord(const Record& rec, std::unordered_map<int, std::string>& pending);
+    void flushPending(std::unordered_map<int, std::string>& pending);
 
     int id_;
     const Schema& schema_;

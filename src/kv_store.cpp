@@ -39,9 +39,9 @@ StoreStats KvStore::stats() const {
 std::vector<std::string> KvStore::sampleKeys(size_t n) const {
     std::shared_lock lock(mutex_);
     std::vector<std::string> out;
-    out.reserve(n);
+    out.reserve(n == 0 ? map_.size() : n);
     for (const auto& [k, v] : map_) {
-        if (out.size() >= n) break;
+        if (n != 0 && out.size() >= n) break;
         out.push_back(k);
     }
     return out;

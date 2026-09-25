@@ -35,11 +35,12 @@ std::string makeFieldValue(const FieldDef& def, std::mt19937& rng) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        std::cerr << "usage: " << argv[0]
-                  << " <config_path> <target_bytes_per_file> [duplicate_ratio]\n";
-        return 1;
-    }
+    try {
+        if (argc < 3) {
+            std::cerr << "usage: " << argv[0]
+                      << " <config_path> <target_bytes_per_file> [duplicate_ratio]\n";
+            return 1;
+        }
 
     std::string configPath = argv[1];
     size_t targetBytes = std::stoull(argv[2]);
@@ -89,5 +90,9 @@ int main(int argc, char** argv) {
         std::cout << "wrote " << path << " (" << bytesWritten << " bytes)\n";
     }
 
-    return 0;
+        return 0;
+    } catch (const std::exception& ex) {
+        std::cerr << "Data generation failed: " << ex.what() << "\n";
+        return 1;
+    }
 }

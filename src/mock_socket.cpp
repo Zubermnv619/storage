@@ -1,5 +1,9 @@
 #include "mock_socket.hpp"
 
+bool MockInbox::connect() const {
+    return true;
+}
+
 void MockInbox::send(int fromNode, const std::string& payload) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -28,7 +32,8 @@ void MockInbox::close() {
 NetworkHub::NetworkHub(int numNodes) : inboxes_(numNodes) {}
 
 bool NetworkHub::connect(int targetNode) const {
-    return targetNode >= 0 && targetNode < static_cast<int>(inboxes_.size());
+    return targetNode >= 0 && targetNode < static_cast<int>(inboxes_.size())
+        && inboxes_[targetNode].connect();
 }
 
 void NetworkHub::send(int fromNode, int toNode, const std::string& payload) {
