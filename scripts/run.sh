@@ -1,6 +1,12 @@
+#!/usr/bin/env bash
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+# Keep the compiler and its runtime DLLs available in MSYS UCRT64 shells.
+if [ -d /ucrt64/bin ]; then
+    export PATH="/ucrt64/bin:$PATH"
+fi
 
 if [ "${1:-}" = "all" ]; then
     CONFIG="${2:-config/cluster.conf}"
