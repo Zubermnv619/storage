@@ -26,7 +26,7 @@ bool KvStore::contains(const std::string& key) const {
     return map_.find(key) != map_.end();
 }
 
-size_t KvStore::size() const {
+std::size_t KvStore::size() const {
     std::shared_lock lock(mutex_);
     return map_.size();
 }
@@ -36,7 +36,7 @@ StoreStats KvStore::stats() const {
     return stats_;
 }
 
-std::vector<std::string> KvStore::sampleKeys(size_t n) const {
+std::vector<std::string> KvStore::sampleKeys(std::size_t n) const {
     std::shared_lock lock(mutex_);
     std::vector<std::string> out;
     out.reserve(n == 0 ? map_.size() : n);

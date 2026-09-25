@@ -19,9 +19,9 @@ public:
     bool put(const Record& rec);
     void noteReceivedFromNetwork();
     [[nodiscard]] bool contains(const std::string& key) const;
-    [[nodiscard]] size_t size() const;
+    [[nodiscard]] std::size_t size() const;
     [[nodiscard]] StoreStats stats() const;
-    [[nodiscard]] std::vector<std::string> sampleKeys(size_t n = 0) const;
+    [[nodiscard]] std::vector<std::string> sampleKeys(std::size_t n = 0) const;
 
 private:
     mutable std::shared_mutex mutex_;
