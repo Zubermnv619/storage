@@ -4,12 +4,13 @@
 #include <iostream>
 #include <sstream>
 
-namespace {
-constexpr size_t batchBytes = 64 * 1024;
-}
-
-Node::Node(int id, const Schema& schema, const Partitioner& partitioner, NetworkHub& hub)
-    : id_(id), schema_(schema), partitioner_(partitioner), hub_(hub) {}
+Node::Node(int id, const Schema& schema, const Partitioner& partitioner, NetworkHub& hub,
+           std::size_t batchBytes)
+    : id_(id),
+      schema_(schema),
+      partitioner_(partitioner),
+      hub_(hub),
+      batchBytes_(batchBytes == 0 ? 1 : batchBytes) {}
 
 int Node::id() const {
     return id_;
@@ -23,15 +24,19 @@ const KvStore& Node::store() const {
     return store_;
 }
 
+std::size_t Node::batchBytes() const {
+    return batchBytes_;
+}
+
 void Node::receiveLoop() {
     WireMessage msg;
     while (hub_.recv(id_, msg)) {
+        std::istringstream batch(msg.payload);
         std::string line;
-        std::stringstream batch(msg.payload);
         while (std::getline(batch, line)) {
             if (line.empty()) continue;
             try {
-                Record rec = parseRecordLine(line, schema_);
+                const Record rec = parseRecordLine(line, schema_);
                 store_.put(rec);
                 store_.noteReceivedFromNetwork();
             } catch (const std::exception& ex) {
@@ -57,7 +62,7 @@ void Node::loadLocalFile(const std::string& path) {
         ++lineNo;
         if (line.empty()) continue;
         try {
-            Record rec = parseRecordLine(line, schema_);
+            const Record rec = parseRecordLine(line, schema_);
             routeRecord(rec, pending);
             ++linesRead_;
         } catch (const std::exception& ex) {
@@ -73,22 +78,25 @@ uint64_t Node::linesRead() const {
 }
 
 void Node::routeRecord(const Record& rec, std::unordered_map<int, std::string>& pending) {
-    int owner = partitioner_.ownerOf(rec.keyAsString());
+    const int owner = partitioner_.ownerOf(rec.keyAsString());
     if (owner == id_) {
         store_.put(rec);
-    } else {
-        std::string& batch = pending[owner];
-        batch += serializeRecord(rec);
-        batch.push_back('\n');
-        if (batch.size() >= batchBytes) {
-            hub_.send(id_, owner, batch);
-            batch.clear();
-        }
+        return;
+    }
+
+    std::string& batch = pending[owner];
+    batch += serializeRecord(rec);
+    batch.push_back('\n');
+    if (batch.size() >= batchBytes_) {
+        hub_.send(id_, owner, batch);
+        batch.clear();
     }
 }
 
-void Node::flushPending(std::unordered_map<int, std::string>& pending) {
-    for (auto& [owner, batch] : pending) {
-        if (!batch.empty()) hub_.send(id_, owner, batch);
+void Node::flushPending(const std::unordered_map<int, std::string>& pending) {
+    for (const auto& entry : pending) {
+        if (!entry.second.empty()) {
+            hub_.send(id_, entry.first, entry.second);
+        }
     }
 }

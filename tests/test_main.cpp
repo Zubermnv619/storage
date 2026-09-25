@@ -74,9 +74,10 @@ void testThreeNodeIntegration() {
     size_t total = 0;
     for (const auto& node : nodes) {
         total += node.store().size();
-        for (const auto& key : node.store().sampleKeys()) {
+        node.store().forEachKey([&](const std::string& key) {
             assert(partitioner.ownerOf(key) == node.id());
-        }
+            return true;
+        });
     }
     assert(total == 3);
     std::filesystem::remove_all(root);
